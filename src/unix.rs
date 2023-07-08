@@ -1,32 +1,30 @@
-use libc::chmod;
 use std::ffi::CString;
 use std::io::{self, Error};
-use futures::Stream;
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use tokio::net::{UnixListener, UnixStream};
 use std::path::Path;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use futures::Stream;
+use libc::chmod;
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::net::{UnixListener, UnixStream};
+
 /// Socket permissions and ownership on UNIX
 pub struct SecurityAttributes {
     // read/write permissions for owner, group and others in unix octal.
-    mode: Option<u16>
+    mode: Option<u16>,
 }
 
 impl SecurityAttributes {
     /// New default security attributes. These only allow access by the
     /// process’s own user and the system administrator.
     pub fn empty() -> Self {
-        SecurityAttributes {
-            mode: Some(0o600)
-        }
+        SecurityAttributes { mode: Some(0o600) }
     }
 
     /// New security attributes that allow everyone to connect.
-    pub fn allow_everyone_connect(mut self) -> io::Result<Self> {
-        self.mode = Some(0o666);
-        Ok(self)
+    pub fn allow_everyone_connect() -> io::Result<Self> {
+        Ok(SecurityAttributes { mode: Some(0o666) })
     }
 
     /// Set a custom permission on the socket
@@ -40,9 +38,7 @@ impl SecurityAttributes {
     /// This does not work on unix, where it is equivalent to
     /// [`SecurityAttributes::allow_everyone_connect`].
     pub fn allow_everyone_create() -> io::Result<Self> {
-        Ok(SecurityAttributes {
-            mode: None
-        })
+        Ok(SecurityAttributes { mode: None })
     }
 
     /// called in unix, after server socket has been created
@@ -50,7 +46,7 @@ impl SecurityAttributes {
     fn apply_permissions(&self, path: &str) -> io::Result<()> {
         if let Some(mode) = self.mode {
             let path = CString::new(path)?;
-            if unsafe { chmod(path.as_ptr(), mode.into()) } == -1 {
+            if unsafe { chmod(path.as_ptr(), mode as _) } == -1 {
                 return Err(Error::last_os_error());
             }
         }
@@ -67,7 +63,10 @@ pub struct Endpoint {
 
 impl Endpoint {
     /// Stream of incoming connections
-    pub fn incoming(self) -> io::Result<impl Stream<Item = std::io::Result<impl AsyncRead + AsyncWrite>> + 'static> {
+    pub fn incoming(
+        self,
+    ) -> io::Result<impl Stream<Item = io::Result<impl AsyncRead + AsyncWrite>> + 'static>
+    {
         let listener = self.inner()?;
         // the call to bind in `inner()` creates the file
         // `apply_permission()` will set the file permissions.
@@ -118,10 +117,7 @@ struct Incoming {
 impl Stream for Incoming {
     type Item = io::Result<UnixStream>;
 
-    fn poll_next(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let this = Pin::into_inner(self);
         match Pin::new(&mut this.listener).poll_accept(cx) {
             Poll::Pending => Poll::Pending,
@@ -166,17 +162,17 @@ impl AsyncWrite for Connection {
         self: Pin<&mut Self>,
         ctx: &mut Context<'_>,
         buf: &[u8],
-    ) -> Poll<Result<usize, io::Error>> {
+    ) -> Poll<Result<usize, Error>> {
         let this = Pin::into_inner(self);
         Pin::new(&mut this.inner).poll_write(ctx, buf)
     }
 
-    fn poll_flush(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+    fn poll_flush(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         let this = Pin::into_inner(self);
         Pin::new(&mut this.inner).poll_flush(ctx)
     }
 
-    fn poll_shutdown(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+    fn poll_shutdown(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         let this = Pin::into_inner(self);
         Pin::new(&mut this.inner).poll_shutdown(ctx)
     }

@@ -1,6 +1,6 @@
 [package]
 name = "parity-tokio-ipc"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2021"
 authors = ["NikVolf <nikvolf@gmail.com>"]
 license = "MIT OR Apache-2.0"
@@ -14,12 +14,12 @@ Interprocess communication library for tokio.
 [dependencies]
 futures = "0.3"
 log = "0.4"
-rand = "0.7"
-tokio = { version = "1.7.0", features = ["net", "time"] }
-libc = "0.2.65"
+rand = "0.8"
+tokio = { version = "1", features = ["net", "time"] }
+libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.45", features = [
+windows-sys = { version = "0.48", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_System_SystemServices",
